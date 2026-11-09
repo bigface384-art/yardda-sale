@@ -231,6 +231,7 @@ footer{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:
       </div>
     </form>
     <p class="note"><a href="#" id="authSwitch">Need an account? Sign up</a></p>
+    <p class="note"><a href="#" id="forgotLink">Forgot password?</a></p>
     <p class="error" id="authMsg"></p>
   </div>
 </div>
@@ -994,6 +995,33 @@ async function saveAvatar(f){
     renderAccount();
   } catch(e){ alert(e.message); }
 }
+async function sendPasswordReset(){
+  const email = String(document.querySelector('#authForm input[name="email"]').value || "").trim();
+  const msg = document.getElementById("authMsg");
+  if (!email) { msg.textContent = "Enter your email above, then tap Forgot password again."; return; }
+  msg.textContent = "Sending...";
+  const r = await authCall("/auth/v1/recover", { email });
+  msg.textContent = r.ok
+    ? "If an account exists for that email, a reset link is on its way. Check your spam folder."
+    : (r.data.msg || r.data.error_description || "Could not send the reset email. Try again later.");
+}
+async function handleRecoveryLink(){
+  if (!location.hash.includes("type=recovery")) return;
+  const params = new URLSearchParams(location.hash.slice(1));
+  const access = params.get("access_token"), refresh = params.get("refresh_token");
+  history.replaceState(null, "", location.pathname + location.search);
+  if (!access) return;
+  const r = await fetch(SUPABASE_URL + "/auth/v1/user", { headers:{ apikey:SUPABASE_ANON, Authorization:"Bearer " + access } });
+  const u = await r.json().catch(() => null);
+  if (!r.ok || !u || !u.id) { alert("That reset link is invalid or has expired. Request a new one."); return; }
+  saveSession({ access_token: access, refresh_token: refresh, expires_in: Number(params.get("expires_in") || 3600), user: { id: u.id, email: u.email } });
+  renderAuthButtons();
+  ui.accountTab = "password";
+  openOverlay("accountOverlay");
+  renderAccount();
+  alert("Enter your new password on the Password tab.");
+}
+
 function openAccount(){
   if (!me()) return openAuth("Sign in to open your account.");
   openOverlay("accountOverlay");
@@ -1126,6 +1154,7 @@ function setAuthMode(mode){
   document.getElementById("authSubmit").textContent = signup ? "Sign up" : "Sign in";
   document.getElementById("authSwitch").textContent = signup ? "Have an account? Sign in" : "Need an account? Sign up";
   document.getElementById("signupFields").hidden = !signup;
+  document.getElementById("forgotLink").hidden = signup;
   document.querySelectorAll("#signupFields input, #signupFields select").forEach(i => i.required = signup);
 }
 const LS_PENDING_PROFILE = "yard_pending_profile";
@@ -1236,6 +1265,7 @@ document.getElementById("postForm").addEventListener("change", e => {
 document.getElementById("search").addEventListener("input", renderGrid);
 document.getElementById("sort").addEventListener("change", renderGrid);
 document.getElementById("upgradeBtn").addEventListener("click", startCheckout);
+document.getElementById("forgotLink").addEventListener("click", e => { e.preventDefault(); sendPasswordReset(); });
 document.getElementById("authSwitch").addEventListener("click", e => {
   e.preventDefault();
   setAuthMode(ui.authMode === "signin" ? "signup" : "signin");
@@ -1396,7 +1426,7 @@ function startLive(){
 
 // Start: draw the page, then load shared data and this user's status
 render();
-loadAll().then(() => { startLive(); handleSellerReturn(); });
+loadAll().then(() => { startLive(); handleSellerReturn(); handleRecoveryLink(); });
 </script>
 </body>
 </html>
