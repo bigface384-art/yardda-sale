@@ -169,6 +169,7 @@ footer{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:
       <button data-action="acct:messages">Messages</button>
       <button data-action="acct:password">Password</button>
       <button data-action="acct:privacy">Privacy</button>
+      <button data-action="acct:security">Security</button>
     </div>
     <div id="accountBody"></div>
   </div>
@@ -233,6 +234,10 @@ footer{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:
     <p class="note"><a href="#" id="authSwitch">Need an account? Sign up</a></p>
     <p class="note"><a href="#" id="forgotLink">Forgot password?</a></p>
     <p class="error" id="authMsg"></p>
+    <form data-form="mfa" id="mfaForm" hidden>
+      <label>Code from your authenticator app<input name="code" inputmode="numeric" maxlength="6" required></label>
+      <div class="row"><button type="button" data-action="closeOverlay:authOverlay">Cancel</button><button type="submit" class="primary">Verify</button></div>
+    </form>
   </div>
 </div>
 
@@ -1023,6 +1028,82 @@ async function handleRecoveryLink(){
   alert("Enter your new password on the Password tab.");
 }
 
+let pendingMfa = null;
+let mfaFactorId = null;
+function showAuthForm(){
+  document.getElementById("authForm").hidden = false;
+  document.getElementById("mfaForm").hidden = true;
+  pendingMfa = null;
+}
+async function verifySignInCode(f){
+  const msg = document.getElementById("authMsg");
+  const code = String(new FormData(f).get("code") || "").trim();
+  if (!pendingMfa) { showAuthForm(); return; }
+  msg.textContent = "Checking code...";
+  const hdr = { apikey: SUPABASE_ANON, Authorization: "Bearer " + pendingMfa.access, "Content-Type": "application/json" };
+  try {
+    const cr = await fetch(`${SUPABASE_URL}/auth/v1/factors/${pendingMfa.factorId}/challenge`, { method:"POST", headers:hdr, body:"{}" });
+    const cd = await cr.json().catch(() => ({}));
+    if (!cr.ok || !cd.id) { msg.textContent = cd.msg || "Could not start the code check. Try again."; return; }
+    const vr = await fetch(`${SUPABASE_URL}/auth/v1/factors/${pendingMfa.factorId}/verify`, { method:"POST", headers:hdr, body: JSON.stringify({ challenge_id: cd.id, code }) });
+    const vd = await vr.json().catch(() => ({}));
+    if (!vr.ok || !vd.access_token) { msg.textContent = "That code did not match. Use the newest code from your app."; return; }
+    saveSession(vd);
+    showAuthForm();
+    f.reset();
+    msg.textContent = "";
+    closeOverlay("authOverlay");
+    renderAuthButtons();
+    await refreshAll();
+  } catch(e){ msg.textContent = "Could not verify the code. Try again."; }
+}
+async function renderSecurity(body){
+  let user;
+  try { user = await api("/auth/v1/user"); }
+  catch(e){ body.innerHTML = `<p class="empty">Could not load security settings. ${esc(e.message)}</p>`; return; }
+  const on = (user.factors || []).find(x => x.factor_type === "totp" && x.status === "verified");
+  body.innerHTML = on
+    ? `<div style="margin-top:12px"><h3>Two-step sign-in</h3>
+         <p class="meta">On. You'll enter a code from your authenticator app each time you sign in.</p>
+         <button class="small danger" data-action="mfaOff:${on.id}">Turn off</button></div>`
+    : `<div style="margin-top:12px"><h3>Two-step sign-in</h3>
+         <p class="meta">Add an authenticator app such as Google Authenticator or Microsoft Authenticator. You'll enter a code from it when you sign in.</p>
+         <button class="primary small" data-action="mfaSetup">Set up authenticator app</button>
+         <div id="mfaSetupBox" style="margin-top:10px"></div></div>`;
+}
+async function startMfaSetup(){
+  const box = document.getElementById("mfaSetupBox");
+  box.innerHTML = `<p class="meta">Preparing...</p>`;
+  try {
+    const d = await api("/auth/v1/factors", { method:"POST", body:{ factor_type:"totp", friendly_name:"Authenticator" } });
+    mfaFactorId = d.id;
+    box.innerHTML = `<div class="box">
+      <p class="meta">Scan this code with Google Authenticator or Microsoft Authenticator, or type the key in by hand.</p>
+      <img src="${esc(d.totp.qr_code)}" alt="Authenticator QR code" style="width:180px;height:180px;background:#fff;border-radius:8px">
+      <p class="meta" style="word-break:break-all">Key: ${esc(d.totp.secret)}</p>
+      <form data-form="mfaEnroll" class="inline" style="margin-top:8px"><input name="code" inputmode="numeric" maxlength="6" placeholder="6-digit code" required><button class="primary" type="submit">Confirm</button></form>
+    </div>`;
+  } catch(e){ box.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
+}
+async function confirmMfaEnroll(f){
+  const code = String(new FormData(f).get("code") || "").trim();
+  try {
+    const ch = await api(`/auth/v1/factors/${mfaFactorId}/challenge`, { method:"POST", body:{} });
+    const vd = await api(`/auth/v1/factors/${mfaFactorId}/verify`, { method:"POST", body:{ challenge_id: ch.id, code } });
+    if (vd && vd.access_token) saveSession(vd);
+    alert("Two-step sign-in is on. You'll enter a code from your app each time you sign in.");
+    renderAccount();
+  } catch(e){ alert("That code did not match. Use the newest code from your app. " + e.message); }
+}
+async function turnOffMfa(id){
+  if (!confirm("Turn off two-step sign-in?")) return;
+  try {
+    await api(`/auth/v1/factors/${id}`, { method:"DELETE" });
+    alert("Two-step sign-in is off.");
+    renderAccount();
+  } catch(e){ alert("Could not turn it off: " + e.message); }
+}
+
 function openAccount(){
   if (!me()) return openAuth("Sign in to open your account.");
   openOverlay("accountOverlay");
@@ -1083,6 +1164,9 @@ function renderAccount(){
   } else if (t === "privacy") {
     body.innerHTML = `<p class="empty">Loading your privacy settings...</p>`;
     renderPrivacy(body);
+  } else if (t === "security") {
+    body.innerHTML = `<p class="empty">Loading your security settings...</p>`;
+    renderSecurity(body);
   } else if (t === "messages") {
     const groups = threadGroups();
     body.innerHTML = `<div style="margin-top:12px">` + (groups.map(g => `<div class="listrow" data-action="openThread:${g.listing_id}|${g.other}" style="cursor:pointer">
@@ -1145,6 +1229,7 @@ async function changePassword(f){
 
 // ---- Auth ----
 function openAuth(message){
+  showAuthForm();
   document.getElementById("authMsg").textContent = message || "";
   openOverlay("authOverlay");
 }
@@ -1214,6 +1299,14 @@ async function submitAuth(f){
     if (signingUp) { try { localStorage.setItem(LS_PENDING_PROFILE, JSON.stringify(profileFromForm)); } catch(e){} }
     msg.textContent = "Account created. Check your email to confirm, then sign in.";
     setAuthMode("signin");
+    return;
+  }
+  const totp = (r.data.user && r.data.user.factors || []).find(x => x.factor_type === "totp" && x.status === "verified");
+  if (!signingUp && totp) {
+    pendingMfa = { factorId: totp.id, access: r.data.access_token };
+    document.getElementById("authForm").hidden = true;
+    document.getElementById("mfaForm").hidden = false;
+    msg.textContent = "Enter the 6-digit code from your authenticator app.";
     return;
   }
   saveSession(r.data);
@@ -1287,6 +1380,8 @@ document.addEventListener("submit", e => {
     case "zip": saveZip(f); break;
     case "zipchange": requestZipChange(f); break;
     case "avatar": saveAvatar(f); break;
+    case "mfa": verifySignInCode(f); break;
+    case "mfaEnroll": confirmMfaEnroll(f); break;
     case "review": submitReview(f); break;
     case "profile": saveProfile(f); break;
     case "password": changePassword(f); break;
@@ -1312,6 +1407,8 @@ document.addEventListener("click", e => {
     legal: () => openLegal(arg),
     unsubscribeAll: () => unsubscribeAll(),
     deleteAccount: () => deleteAccount(),
+    mfaSetup: () => startMfaSetup(),
+    mfaOff: () => turnOffMfa(arg),
     nav: () => navTo(arg),
     acct: () => { ui.accountTab = arg; renderAccount(); },
     openThread: () => openThread(arg),
