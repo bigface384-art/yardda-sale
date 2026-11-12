@@ -1000,7 +1000,8 @@ async function sendPasswordReset(){
   const msg = document.getElementById("authMsg");
   if (!email) { msg.textContent = "Enter your email above, then tap Forgot password again."; return; }
   msg.textContent = "Sending...";
-  const r = await authCall("/auth/v1/recover", { email });
+  const redirectTo = encodeURIComponent("https://bigface384-art.github.io/yardda-sale/");
+  const r = await authCall(`/auth/v1/recover?redirect_to=${redirectTo}`, { email });
   msg.textContent = r.ok
     ? "If an account exists for that email, a reset link is on its way. Check your spam folder."
     : (r.data.msg || r.data.error_description || "Could not send the reset email. Try again later.");
