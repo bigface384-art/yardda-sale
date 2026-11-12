@@ -1076,7 +1076,7 @@ async function startMfaSetup(){
   const box = document.getElementById("mfaSetupBox");
   box.innerHTML = `<p class="meta">Preparing...</p>`;
   try {
-    const d = await api("/auth/v1/factors", { method:"POST", body:{ factor_type:"totp", friendly_name:"Authenticator" } });
+    const d = await api("/auth/v1/factors", { method:"POST", body:{ factor_type:"totp", friendly_name:"Authenticator-"+Date.now() } });
     mfaFactorId = d.id;
     box.innerHTML = `<div class="box">
       <p class="meta">Scan this code with Google Authenticator or Microsoft Authenticator, or type the key in by hand.</p>
