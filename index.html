@@ -394,6 +394,8 @@ const openOverlay = id => document.getElementById(id).classList.add("open");
 // ---- Rendering ----
 function render(){ renderHeader(); renderBanner(); renderChips(); renderGrid(); renderAuthButtons(); }
 function renderHeader(){
+  const listBtn = document.querySelector('.controls button.primary');
+  if (listBtn) listBtn.hidden = ui.view === "forum";
   const pb = document.getElementById("planBadge");
   pb.textContent = isPaid() ? "Paid plan" : "Free plan";
   pb.classList.toggle("paid", isPaid());
@@ -458,7 +460,7 @@ function cardHTML(l){
 function renderGrid(){
   if (ui.view === "forum") {
     document.getElementById("empty").hidden = true;
-    document.getElementById("grid").innerHTML = `<div class="empty">The community forum opens here next.</div>`;
+    document.getElementById("grid").innerHTML = forumHTML();
     return;
   }
   const items = visible();
@@ -1114,6 +1116,105 @@ async function turnOffMfa(id){
   } catch(e){ alert("Could not turn it off: " + e.message); }
 }
 
+let forumPosts = [];
+let forumReplies = [];
+async function loadForum(){
+  try {
+    forumPosts = (await api("/rest/v1/forum_posts?select=*&order=created_at.desc&limit=200")) || [];
+    const ids = forumPosts.map(p => p.id);
+    forumReplies = ids.length ? ((await api(`/rest/v1/forum_replies?select=*&post_id=in.(${ids.join(",")})&order=created_at.asc`)) || []) : [];
+  } catch(e){ forumPosts = []; forumReplies = []; }
+  render();
+}
+function forumHTML(){
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  const list = forumPosts.filter(p => !q || [p.title, p.body, p.zip_code].some(v => String(v || "").toLowerCase().includes(q)));
+  const top = me()
+    ? `<div><button class="primary small" data-action="forumNew">+ New post</button></div>`
+    : `<p class="meta">Anyone can read the forum. Sign in to post or reply.</p>`;
+  const cards = list.map(p => {
+    const count = forumReplies.filter(r => r.post_id === p.id).length;
+    return `<div class="card" data-action="forumOpen:${p.id}"><div class="cbody">
+      <h3>${esc(p.title)}</h3>
+      <p class="meta">${p.zip_code ? "Zip " + esc(p.zip_code) : "Zip not set"} · ${esc(nameOf(p.author_id))} · ${fmtPosted(p.created_at)}</p>
+      <p class="meta">${esc(String(p.body || "").slice(0, 160))}</p>
+      <div class="stats"><span>💬 ${count} ${count === 1 ? "reply" : "replies"}</span></div>
+    </div></div>`;
+  }).join("");
+  const empty = `<div class="empty">${q ? "No posts match your search." : "No posts yet. Start the conversation."}</div>`;
+  return `<div style="grid-column:1/-1;display:grid;gap:12px">${top}${cards || empty}</div>`;
+}
+function openForumPost(id){
+  const p = forumPosts.find(x => x.id === id);
+  if (!p) return;
+  const replies = forumReplies.filter(r => r.post_id === id);
+  const repliesHTML = replies.map(r => `<div class="box">
+      <p class="meta">${esc(nameOf(r.author_id))} · ${r.zip_code ? "Zip " + esc(r.zip_code) : ""} · ${fmtPosted(r.created_at)}</p>
+      <p>${esc(r.body)}</p>
+      <button class="link" data-action="reportReply:${r.id}">Report</button>
+    </div>`).join("") || `<p class="meta">No replies yet.</p>`;
+  document.getElementById("detailSheet").innerHTML = `
+    <h2>${esc(p.title)}</h2>
+    <p class="meta">${p.zip_code ? "Zip " + esc(p.zip_code) : "Zip not set"} · ${esc(nameOf(p.author_id))} · ${fmtPosted(p.created_at)}</p>
+    <p>${esc(p.body)}</p>
+    <div class="stats"><button class="link" data-action="reportPost:${p.id}">Report post</button></div>
+    <h3>Replies</h3>
+    ${repliesHTML}
+    ${me()
+      ? `<form data-form="forumreply" data-id="${p.id}" class="inline-col" style="margin-top:10px"><textarea name="body" rows="2" maxlength="1000" placeholder="Write a reply" required></textarea><button class="primary" type="submit">Reply</button></form>`
+      : `<button class="small" data-action="signinPrompt" style="margin-top:10px">Sign in to reply</button>`}
+    <div class="row"><button data-action="closeOverlay:detailOverlay">Close</button></div>`;
+  openOverlay("detailOverlay");
+}
+function openNewPost(){
+  if (!me()) return openAuth("Sign in to post in the forum.");
+  document.getElementById("detailSheet").innerHTML = `
+    <h2>New post</h2>
+    <p class="meta">Describe what happened or share something with your neighbors. Describe behavior, and don't accuse people by name. Your zip code is shown with the post.</p>
+    <form data-form="forumpost" class="inline-col">
+      <label>Title<input name="title" maxlength="120" required></label>
+      <label>Message<textarea name="body" rows="5" maxlength="2000" required></textarea></label>
+      <div class="error" id="forumMsg"></div>
+      <div class="row"><button type="button" data-action="closeOverlay:detailOverlay">Cancel</button><button class="primary" type="submit">Post</button></div>
+    </form>`;
+  openOverlay("detailOverlay");
+}
+async function submitForumPost(f){
+  const d = new FormData(f);
+  const msg = document.getElementById("forumMsg");
+  msg.textContent = "Posting...";
+  try {
+    const rows = await api("/rest/v1/forum_posts", { method:"POST", prefer:"return=representation",
+      body:{ author_id: me(), title: String(d.get("title")).trim(), body: String(d.get("body")).trim() } });
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    closeOverlay("detailOverlay");
+    await loadForum();
+    if (row && row.status !== "published") alert("Your post was sent for review before it appears.");
+  } catch(e){ msg.textContent = e.message; }
+}
+async function submitForumReply(f){
+  const body = String(new FormData(f).get("body")).trim();
+  const postId = f.dataset.id;
+  try {
+    const rows = await api("/rest/v1/forum_replies", { method:"POST", prefer:"return=representation",
+      body:{ post_id: postId, author_id: me(), body } });
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    await loadForum();
+    openForumPost(postId);
+    if (row && row.status !== "published") alert("Your reply was sent for review before it appears.");
+  } catch(e){ alert(e.message); }
+}
+async function reportItem(kind, id){
+  if (!me()) return openAuth("Sign in to report.");
+  const reason = prompt("What is the problem? For example: threat, harassment, false accusation, or spam.");
+  if (!reason || !reason.trim()) return;
+  try {
+    await api("/rest/v1/forum_reports", { method:"POST", prefer:"return=minimal",
+      body:{ reporter_id: me(), post_id: kind === "post" ? id : null, reply_id: kind === "reply" ? id : null, reason: reason.trim() } });
+    alert("Thank you. The report was sent for review.");
+  } catch(e){ alert(e.message); }
+}
+
 function openAccount(){
   if (!me()) return openAuth("Sign in to open your account.");
   openOverlay("accountOverlay");
@@ -1392,6 +1493,8 @@ document.addEventListener("submit", e => {
     case "avatar": saveAvatar(f); break;
     case "mfa": verifySignInCode(f); break;
     case "mfaEnroll": confirmMfaEnroll(f); break;
+    case "forumpost": submitForumPost(f); break;
+    case "forumreply": submitForumReply(f); break;
     case "review": submitReview(f); break;
     case "profile": saveProfile(f); break;
     case "password": changePassword(f); break;
@@ -1405,7 +1508,7 @@ document.addEventListener("click", e => {
   const [a, ...rest] = el.dataset.action.split(":");
   const arg = rest.join(":");
   const actions = {
-    view: () => { ui.view = arg; render(); },
+    view: () => { ui.view = arg; if (arg === "forum") loadForum(); else render(); },
     cat: () => { ui.category = arg; render(); },
     open: () => openDetail(arg),
     openProfile: () => openProfile(arg),
@@ -1415,6 +1518,10 @@ document.addEventListener("click", e => {
     auth: () => me() ? logout() : (setAuthMode("signin"), openAuth("")),
     openAccount: () => openAccount(),
     legal: () => openLegal(arg),
+    forumNew: () => openNewPost(),
+    forumOpen: () => openForumPost(arg),
+    reportPost: () => reportItem("post", arg),
+    reportReply: () => reportItem("reply", arg),
     unsubscribeAll: () => unsubscribeAll(),
     deleteAccount: () => deleteAccount(),
     mfaSetup: () => startMfaSetup(),
