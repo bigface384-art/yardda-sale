@@ -112,9 +112,8 @@ footer{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:
     </div>
   </div>
   <div class="tabs">
-    <button class="tab active" data-action="view:all">Browse</button>
-    <button class="tab bid" data-action="view:bid">Barter &amp; Bid</button>
-    <button class="tab hd" data-action="view:hd">Hot Deals (HD)</button>
+    <button class="tab active" data-action="view:all">Sale Room</button>
+    <button class="tab" data-action="view:forum">Forum</button>
   </div>
   <div class="controls">
     <input type="search" id="search" placeholder="Search items, streets, cities, or sellers">
@@ -398,7 +397,7 @@ function renderHeader(){
   const pb = document.getElementById("planBadge");
   pb.textContent = isPaid() ? "Paid plan" : "Free plan";
   pb.classList.toggle("paid", isPaid());
-  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.action === "view:" + ui.view));
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.action === (ui.view === "forum" ? "view:forum" : "view:all")));
 }
 function renderAuthButtons(){
   document.getElementById("authBtn").textContent = me() ? "Log out" : "Sign in";
@@ -412,8 +411,13 @@ function renderBanner(){
 }
 function renderChips(){
   const el = document.getElementById("chips");
-  if (ui.view !== "all") { el.innerHTML = ""; return; }
-  el.innerHTML = ["All", ...CATEGORIES].map(c => `<button class="chip ${c === ui.category ? "active" : ""}" data-action="cat:${esc(c)}">${esc(c)}</button>`).join("");
+  if (ui.view === "forum") { el.innerHTML = ""; return; }
+  const types = [["all","Everything"],["bid","Barter & Bid"],["hd","Hot Deals (HD)"]];
+  const typeChips = types.map(([v,l]) => `<button class="chip ${ui.view === v ? "active" : ""}" data-action="view:${v}">${l}</button>`).join("");
+  const catChips = ui.view === "all"
+    ? ["All", ...CATEGORIES].map(c => `<button class="chip ${c === ui.category ? "active" : ""}" data-action="cat:${esc(c)}">${esc(c)}</button>`).join("")
+    : "";
+  el.innerHTML = typeChips + catChips;
 }
 function visible(){
   const q = document.getElementById("search").value.trim().toLowerCase();
@@ -452,6 +456,11 @@ function cardHTML(l){
     </div></div>`;
 }
 function renderGrid(){
+  if (ui.view === "forum") {
+    document.getElementById("empty").hidden = true;
+    document.getElementById("grid").innerHTML = `<div class="empty">The community forum opens here next.</div>`;
+    return;
+  }
   const items = visible();
   document.getElementById("empty").hidden = items.length > 0;
   document.getElementById("grid").innerHTML = items.map(cardHTML).join("");
