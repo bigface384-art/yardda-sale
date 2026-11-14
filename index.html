@@ -1134,11 +1134,14 @@ function forumHTML(){
     : `<p class="meta">Anyone can read the forum. Sign in to post or reply.</p>`;
   const cards = list.map(p => {
     const count = forumReplies.filter(r => r.post_id === p.id).length;
+    const recent = forumReplies.filter(r => r.post_id === p.id).slice(-2);
+    const recentHTML = recent.map(r => `<div class="meta" style="padding:6px 0;border-top:1px solid var(--border)"><strong>${esc(nameOf(r.author_id))}</strong>: ${esc(String(r.body || "").slice(0, 140))}</div>`).join("");
     return `<div class="card" data-action="forumOpen:${p.id}"><div class="cbody">
       <h3>${esc(p.title)}</h3>
       <p class="meta">${p.zip_code ? "Zip " + esc(p.zip_code) : "Zip not set"} · ${esc(nameOf(p.author_id))} · ${fmtPosted(p.created_at)}</p>
       <p class="meta">${esc(String(p.body || "").slice(0, 160))}</p>
-      <div class="stats"><span>💬 ${count} ${count === 1 ? "reply" : "replies"}</span></div>
+      ${recentHTML}
+      <div class="stats"><span>💬 ${count} ${count === 1 ? "reply" : "replies"}</span>${count > 2 ? `<button class="link" data-action="forumOpen:${p.id}">View all</button>` : ""}</div>
     </div></div>`;
   }).join("");
   const empty = `<div class="empty">${q ? "No posts match your search." : "No posts yet. Start the conversation."}</div>`;
