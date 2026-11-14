@@ -1138,7 +1138,7 @@ function forumHTML(){
     const recentHTML = recent.map(r => `<div class="meta" style="padding:6px 0;border-top:1px solid var(--border)"><strong>${esc(nameOf(r.author_id))}</strong>: ${esc(String(r.body || "").slice(0, 140))}</div>`).join("");
     return `<div class="card" data-action="forumOpen:${p.id}"><div class="cbody">
       <h3>${esc(p.title)}</h3>
-      <p class="meta">${p.zip_code ? "Zip " + esc(p.zip_code) : "Zip not set"} · ${esc(nameOf(p.author_id))} · ${fmtPosted(p.created_at)}</p>
+      <p class="meta">${p.zip_code ? "Zip " + esc(p.zip_code) : "Zip not set"} · ${forumAvatar(p.author_id)} ${esc(nameOf(p.author_id))} · ${fmtPosted(p.created_at)}</p>
       <p class="meta">${esc(String(p.body || "").slice(0, 160))}</p>
       ${recentHTML}
       <div class="stats"><span>💬 ${count} ${count === 1 ? "reply" : "replies"}</span>${count > 2 ? `<button class="link" data-action="forumOpen:${p.id}">View all</button>` : ""}</div>
@@ -1152,15 +1152,15 @@ function openForumPost(id){
   if (!p) return;
   const replies = forumReplies.filter(r => r.post_id === id);
   const repliesHTML = replies.map(r => `<div class="box">
-      <p class="meta">${esc(nameOf(r.author_id))} · ${r.zip_code ? "Zip " + esc(r.zip_code) : ""} · ${fmtPosted(r.created_at)}</p>
+      <p class="meta">${forumAvatar(r.author_id)} ${esc(nameOf(r.author_id))} · ${r.zip_code ? "Zip " + esc(r.zip_code) : ""} · ${fmtPosted(r.created_at)}</p>
       <p>${esc(r.body)}</p>
-      <button class="link" data-action="reportReply:${r.id}">Report</button>
+      <button class="link" data-action="reportReply:${r.id}">Report</button>${r.author_id === me() ? ` <button class="link" data-action="forumReplyDelete:${r.id}">Delete my reply</button>` : ""}
     </div>`).join("") || `<p class="meta">No replies yet.</p>`;
   document.getElementById("detailSheet").innerHTML = `
     <h2>${esc(p.title)}</h2>
-    <p class="meta">${p.zip_code ? "Zip " + esc(p.zip_code) : "Zip not set"} · ${esc(nameOf(p.author_id))} · ${fmtPosted(p.created_at)}</p>
+    <p class="meta">${p.zip_code ? "Zip " + esc(p.zip_code) : "Zip not set"} · ${forumAvatar(p.author_id)} ${esc(nameOf(p.author_id))} · ${fmtPosted(p.created_at)}</p>
     <p>${esc(p.body)}</p>
-    <div class="stats"><button class="link" data-action="reportPost:${p.id}">Report post</button></div>
+    <div class="stats"><button class="link" data-action="reportPost:${p.id}">Report post</button>${p.author_id === me() ? ` <button class="link" data-action="forumDelete:${p.id}">Delete my post</button>` : ""}</div>
     <h3>Replies</h3>
     ${repliesHTML}
     ${me()
@@ -1216,6 +1216,31 @@ async function reportItem(kind, id){
       body:{ reporter_id: me(), post_id: kind === "post" ? id : null, reply_id: kind === "reply" ? id : null, reason: reason.trim() } });
     alert("Thank you. The report was sent for review.");
   } catch(e){ alert(e.message); }
+}
+
+function forumAvatar(uid){
+  const p = db.profiles[uid] || {};
+  return p.avatar_url
+    ? `<img src="${esc(p.avatar_url)}" alt="" style="width:26px;height:26px;border-radius:50%;object-fit:cover;vertical-align:middle">`
+    : `<span style="display:inline-block;width:26px;height:26px;border-radius:50%;background:#333;color:#fff;text-align:center;line-height:26px;font-size:.8rem;vertical-align:middle">${esc((p.display_name || "?").charAt(0).toUpperCase())}</span>`;
+}
+async function deleteForumPost(id){
+  if (!confirm("Delete this post and all its replies? This can't be undone.")) return;
+  try {
+    await api(`/rest/v1/forum_posts?id=eq.${id}`, { method:"DELETE", prefer:"return=minimal" });
+    closeOverlay("detailOverlay");
+    await loadForum();
+  } catch(e){ alert("Could not delete the post: " + e.message); }
+}
+async function deleteForumReply(id){
+  const r = forumReplies.find(x => x.id === id);
+  if (!r) return;
+  if (!confirm("Delete this reply?")) return;
+  try {
+    await api(`/rest/v1/forum_replies?id=eq.${id}`, { method:"DELETE", prefer:"return=minimal" });
+    await loadForum();
+    openForumPost(r.post_id);
+  } catch(e){ alert("Could not delete the reply: " + e.message); }
 }
 
 function openAccount(){
@@ -1523,6 +1548,8 @@ document.addEventListener("click", e => {
     legal: () => openLegal(arg),
     forumNew: () => openNewPost(),
     forumOpen: () => openForumPost(arg),
+    forumDelete: () => deleteForumPost(arg),
+    forumReplyDelete: () => deleteForumReply(arg),
     reportPost: () => reportItem("post", arg),
     reportReply: () => reportItem("reply", arg),
     unsubscribeAll: () => unsubscribeAll(),
