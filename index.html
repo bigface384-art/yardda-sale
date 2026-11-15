@@ -274,7 +274,7 @@ const CATEGORIES = ["Furniture","Kids & Baby","Clothing","Electronics","Tools","
 const loadJSON = (k, f) => { try { const v = localStorage.getItem(k); if (v) return JSON.parse(v); } catch(e){} return f; };
 let session = loadJSON(LS_SESSION, null);
 let db = { listings:[], profiles:{}, likes:[], saves:[], bids:[], offers:[], reviews:[], hd:{}, messages:[] };
-let ui = { view:"all", category:"All", plan:"free", accountTab:"profile", editingId:null, existingPhotos:[], authMode:"signin", viewed:new Set(), detailId:null, thread:null };
+let ui = { view:"forum", category:"All", plan:"free", accountTab:"profile", editingId:null, existingPhotos:[], authMode:"signin", viewed:new Set(), detailId:null, thread:null };
 
 const me = () => session ? session.user.id : null;
 const isPaid = () => ui.plan === "paid";
@@ -396,6 +396,7 @@ function render(){ renderHeader(); renderBanner(); renderChips(); renderGrid(); 
 function renderHeader(){
   const listBtn = document.querySelector('.controls button.primary');
   if (listBtn) listBtn.hidden = ui.view === "forum";
+  document.getElementById("search").placeholder = ui.view === "forum" ? "Search posts, authors, or tags" : "Search items, streets, cities, or sellers";
   const pb = document.getElementById("planBadge");
   pb.textContent = isPaid() ? "Paid plan" : "Free plan";
   pb.classList.toggle("paid", isPaid());
@@ -787,6 +788,7 @@ function openProfile(uid){
            <button class="primary" type="submit">Submit</button>
          </form>`
       : `<button class="small" data-action="signinPrompt" style="margin-top:10px">Sign in to leave a review</button>`}
+    ${me() && uid !== me() ? `<div class="row" style="justify-content:flex-start"><button class="primary small" data-action="dmOpen:${uid}">Message</button></div>` : ""}
     <div class="row"><button data-action="closeOverlay:profileOverlay">Close</button></div>`;
   if (hidden) document.querySelectorAll("#profileSheet .bidlist").forEach(el => el.style.filter = "blur(6px)");
   openOverlay("profileOverlay");
@@ -1128,7 +1130,7 @@ async function loadForum(){
 }
 function forumHTML(){
   const q = document.getElementById("search").value.trim().toLowerCase();
-  const list = forumPosts.filter(p => !q || [p.title, p.body, p.zip_code].some(v => String(v || "").toLowerCase().includes(q)));
+  const list = forumPosts.filter(p => !q || [p.title, p.body, p.zip_code, nameOf(p.author_id), ...(p.tags || [])].some(v => String(v || "").toLowerCase().includes(q)));
   const top = me()
     ? `<div><button class="primary small" data-action="forumNew">+ New post</button></div>`
     : `<p class="meta">Anyone can read the forum. Sign in to post or reply.</p>`;
@@ -1138,7 +1140,8 @@ function forumHTML(){
     const recentHTML = recent.map(r => `<div class="meta" style="padding:6px 0;border-top:1px solid var(--border)"><strong>${esc(nameOf(r.author_id))}</strong>: ${esc(String(r.body || "").slice(0, 140))}</div>`).join("");
     return `<div class="card" data-action="forumOpen:${p.id}"><div class="cbody">
       <h3>${esc(p.title)}</h3>
-      <p class="meta">${p.zip_code ? "Zip " + esc(p.zip_code) : "Zip not set"} · ${forumAvatar(p.author_id)} ${esc(nameOf(p.author_id))} · ${fmtPosted(p.created_at)}</p>
+      ${(p.tags || []).length ? `<p class="meta">${p.tags.map(t => "#" + esc(t)).join(" ")}</p>` : ""}
+      <p class="meta">${p.zip_code ? "Zip " + esc(p.zip_code) : "Zip not set"} · ${forumAvatar(p.author_id)} ${forumName(p.author_id)} · ${fmtPosted(p.created_at)}</p>
       <p class="meta">${esc(String(p.body || "").slice(0, 160))}</p>
       ${recentHTML}
       <div class="stats"><span>💬 ${count} ${count === 1 ? "reply" : "replies"}</span>${count > 2 ? `<button class="link" data-action="forumOpen:${p.id}">View all</button>` : ""}</div>
@@ -1152,15 +1155,16 @@ function openForumPost(id){
   if (!p) return;
   const replies = forumReplies.filter(r => r.post_id === id);
   const repliesHTML = replies.map(r => `<div class="box">
-      <p class="meta">${forumAvatar(r.author_id)} ${esc(nameOf(r.author_id))} · ${r.zip_code ? "Zip " + esc(r.zip_code) : ""} · ${fmtPosted(r.created_at)}</p>
+      <p class="meta">${forumAvatar(r.author_id)} ${forumName(r.author_id)} · ${r.zip_code ? "Zip " + esc(r.zip_code) : ""} · ${fmtPosted(r.created_at)}</p>
       <p>${esc(r.body)}</p>
-      <button class="link" data-action="reportReply:${r.id}">Report</button>${r.author_id === me() ? ` <button class="link" data-action="forumReplyDelete:${r.id}">Delete my reply</button>` : ""}
+      <button class="link" data-action="reportReply:${r.id}">Report</button>${r.author_id !== me() && me() ? ` <button class="link" data-action="dmOpen:${r.author_id}">Message</button>` : ""}${r.author_id === me() ? ` <button class="link" data-action="forumReplyDelete:${r.id}">Delete my reply</button>` : ""}
     </div>`).join("") || `<p class="meta">No replies yet.</p>`;
   document.getElementById("detailSheet").innerHTML = `
     <h2>${esc(p.title)}</h2>
-    <p class="meta">${p.zip_code ? "Zip " + esc(p.zip_code) : "Zip not set"} · ${forumAvatar(p.author_id)} ${esc(nameOf(p.author_id))} · ${fmtPosted(p.created_at)}</p>
+    ${(p.tags || []).length ? `<p class="meta">${p.tags.map(t => "#" + esc(t)).join(" ")}</p>` : ""}
+    <p class="meta">${p.zip_code ? "Zip " + esc(p.zip_code) : "Zip not set"} · ${forumAvatar(p.author_id)} ${forumName(p.author_id)} · ${fmtPosted(p.created_at)}</p>
     <p>${esc(p.body)}</p>
-    <div class="stats"><button class="link" data-action="reportPost:${p.id}">Report post</button>${p.author_id === me() ? ` <button class="link" data-action="forumDelete:${p.id}">Delete my post</button>` : ""}</div>
+    <div class="stats"><button class="link" data-action="reportPost:${p.id}">Report post</button>${p.author_id !== me() && me() ? ` <button class="link" data-action="dmOpen:${p.author_id}">Message author</button>` : ""}${p.author_id === me() ? ` <button class="link" data-action="forumDelete:${p.id}">Delete my post</button>` : ""}</div>
     <h3>Replies</h3>
     ${repliesHTML}
     ${me()
@@ -1177,6 +1181,7 @@ function openNewPost(){
     <form data-form="forumpost" class="inline-col">
       <label>Title<input name="title" maxlength="120" required></label>
       <label>Message<textarea name="body" rows="5" maxlength="2000" required></textarea></label>
+      <label>Tags (optional, separated by commas)<input name="tags" maxlength="200" placeholder="yard sales, safety, events"></label>
       <div class="error" id="forumMsg"></div>
       <div class="row"><button type="button" data-action="closeOverlay:detailOverlay">Cancel</button><button class="primary" type="submit">Post</button></div>
     </form>`;
@@ -1188,7 +1193,8 @@ async function submitForumPost(f){
   msg.textContent = "Posting...";
   try {
     const rows = await api("/rest/v1/forum_posts", { method:"POST", prefer:"return=representation",
-      body:{ author_id: me(), title: String(d.get("title")).trim(), body: String(d.get("body")).trim() } });
+      body:{ author_id: me(), title: String(d.get("title")).trim(), body: String(d.get("body")).trim(),
+        tags: String(d.get("tags") || "").split(",").map(t => t.trim().toLowerCase().replace(/^#/, "")).filter(Boolean).slice(0, 8) } });
     const row = Array.isArray(rows) ? rows[0] : rows;
     closeOverlay("detailOverlay");
     await loadForum();
@@ -1241,6 +1247,44 @@ async function deleteForumReply(id){
     await loadForum();
     openForumPost(r.post_id);
   } catch(e){ alert("Could not delete the reply: " + e.message); }
+}
+
+function forumName(uid){
+  return `<button class="link" data-action="openProfile:${uid}">${esc(nameOf(uid))}</button>`;
+}
+let dmWith = null;
+async function openDM(uid){
+  if (!me()) return openAuth("Sign in to send a private message.");
+  if (uid === me()) return;
+  dmWith = uid;
+  await renderDM();
+  openOverlay("threadOverlay");
+}
+async function renderDM(){
+  const uid = dmWith;
+  let msgs = [];
+  try {
+    msgs = (await api(`/rest/v1/direct_messages?select=*&or=(and(sender_id.eq.${me()},recipient_id.eq.${uid}),and(sender_id.eq.${uid},recipient_id.eq.${me()}))&order=created_at.asc`)) || [];
+  } catch(e){ msgs = []; }
+  document.getElementById("threadSheet").innerHTML = `
+    <h2>Private message</h2>
+    <p class="meta">With ${esc(nameOf(uid))}</p>
+    <div class="thread">${msgs.map(m => `<div class="bubble ${m.sender_id === me() ? "me" : ""}"><div>${esc(m.body)}</div>
+      <div class="meta">${new Date(m.created_at).toLocaleString(undefined, {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"})}</div></div>`).join("") || "<p class='empty'>No messages yet.</p>"}</div>
+    <form data-form="dm" class="inline">
+      <input name="body" maxlength="1000" placeholder="Write a message" required>
+      <button class="primary" type="submit">Send</button>
+    </form>
+    <div class="row"><button data-action="closeOverlay:threadOverlay">Close</button></div>`;
+}
+async function sendDM(f){
+  const body = String(new FormData(f).get("body")).trim();
+  if (!body || !dmWith) return;
+  try {
+    await api("/rest/v1/direct_messages", { method:"POST", prefer:"return=minimal", body:{ sender_id: me(), recipient_id: dmWith, body } });
+    f.reset();
+    await renderDM();
+  } catch(e){ alert(e.message); }
 }
 
 function openAccount(){
@@ -1523,6 +1567,7 @@ document.addEventListener("submit", e => {
     case "mfaEnroll": confirmMfaEnroll(f); break;
     case "forumpost": submitForumPost(f); break;
     case "forumreply": submitForumReply(f); break;
+    case "dm": sendDM(f); break;
     case "review": submitReview(f); break;
     case "profile": saveProfile(f); break;
     case "password": changePassword(f); break;
@@ -1549,6 +1594,7 @@ document.addEventListener("click", e => {
     forumNew: () => openNewPost(),
     forumOpen: () => openForumPost(arg),
     forumDelete: () => deleteForumPost(arg),
+    dmOpen: () => openDM(arg),
     forumReplyDelete: () => deleteForumReply(arg),
     reportPost: () => reportItem("post", arg),
     reportReply: () => reportItem("reply", arg),
@@ -1671,7 +1717,7 @@ function startLive(){
 
 // Start: draw the page, then load shared data and this user's status
 render();
-loadAll().then(() => { startLive(); handleSellerReturn(); handleRecoveryLink(); });
+loadAll().then(() => { startLive(); handleSellerReturn(); handleRecoveryLink(); loadForum(); });
 </script>
 </body>
 </html>
