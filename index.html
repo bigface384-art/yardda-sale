@@ -125,6 +125,7 @@ footer{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:
     </select>
     <button class="primary" data-action="openPost">+ List an item</button>
   </div>
+  <div id="searchSuggest" hidden style="position:absolute;left:16px;right:16px;top:100%;background:var(--card);border:1px solid var(--border);border-radius:10px;z-index:20;max-height:50vh;overflow:auto;box-shadow:0 6px 18px rgba(0,0,0,.25)"></div>
 </header>
 
 <main>
@@ -795,12 +796,17 @@ function openProfile(uid){
 }
 async function submitReview(f){
   const d = new FormData(f);
+  const btn = f.querySelector('button[type="submit"]');
+  if (btn) { btn.disabled = true; btn.style.opacity = ".5"; btn.textContent = "Saving..."; }
   try {
     await api("/rest/v1/reviews?on_conflict=seller_id,reviewer_id", { method:"POST", prefer:"resolution=merge-duplicates,return=minimal",
       body:{ seller_id:f.dataset.id, reviewer_id:me(), rating:Number(d.get("rating")), recommend:!!d.get("recommend"), comment:String(d.get("comment") || "").trim() || null } });
     await loadAll();
     openProfile(f.dataset.id);
-  } catch(e){ alert(e.message); }
+  } catch(e){
+    if (btn) { btn.disabled = false; btn.style.opacity = ""; btn.textContent = "Submit"; }
+    alert(e.message);
+  }
 }
 
 // ---- Account page ----
@@ -1308,6 +1314,60 @@ async function uploadForumPhotos(files){
   return urls;
 }
 
+async function renderInbox(body){
+  let dms = [];
+  try {
+    dms = (await api(`/rest/v1/direct_messages?select=*&or=(sender_id.eq.${me()},recipient_id.eq.${me()})&order=created_at.desc&limit=300`)) || [];
+  } catch(e){ dms = []; }
+  const convos = {};
+  for (const m of dms){
+    const other = m.sender_id === me() ? m.recipient_id : m.sender_id;
+    if (!convos[other]) convos[other] = { other, last: m };
+  }
+  const dmRows = Object.values(convos).map(c => `<div class="listrow" data-action="dmOpen:${c.other}" style="cursor:pointer">
+      <div><strong>${esc(nameOf(c.other))}</strong><div class="meta">${esc(String(c.last.body).slice(0, 80))}</div></div>
+      <span class="meta">${fmtPosted(c.last.created_at)}</span>
+    </div>`).join("");
+  const listingRows = threadGroups().map(g => `<div class="listrow" data-action="openThread:${g.listing_id}|${g.other}" style="cursor:pointer">
+      <div><strong>${esc(g.title)}</strong><div class="meta">${esc(nameOf(g.other))} · ${esc(g.last.body)}</div></div>
+      ${g.unread ? `<span class="badge hd">${g.unread} new</span>` : ""}
+    </div>`).join("");
+  body.innerHTML = `<div style="margin-top:12px">
+    <h3>Private messages</h3>
+    ${dmRows || '<p class="meta">No private messages yet. Tap Message on a forum post or a profile to start one.</p>'}
+    <h3 style="margin-top:18px">Listing messages</h3>
+    ${listingRows || '<p class="meta">No listing messages yet.</p>'}
+  </div>`;
+}
+
+function renderSuggest(){
+  const box = document.getElementById("searchSuggest");
+  const raw = document.getElementById("search").value.trim();
+  const q = raw.toLowerCase().replace(/^#/, "");
+  if (ui.view !== "forum" || !q) { box.hidden = true; box.innerHTML = ""; return; }
+  const tags = [...new Set(forumPosts.flatMap(p => p.tags || []))].filter(t => t.includes(q)).slice(0, 4);
+  const authorIds = [...new Set(forumPosts.map(p => p.author_id))].filter(uid => nameOf(uid).toLowerCase().includes(q)).slice(0, 3);
+  const posts = forumPosts.filter(p => String(p.title || "").toLowerCase().includes(q)).slice(0, 4);
+  const row = (html, action) => `<div data-action="${action}" style="padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer">${html}</div>`;
+  let html = "";
+  tags.forEach(t => { html += row(`<span class="meta">Tag</span> <strong>#${esc(t)}</strong>`, `forumTag:${esc(t)}`); });
+  authorIds.forEach(uid => { html += row(`<span class="meta">Author</span> <strong>${esc(nameOf(uid))}</strong>`, `forumAuthor:${uid}`); });
+  posts.forEach(p => { html += row(`<span class="meta">Post</span> <strong>${esc(p.title)}</strong>`, `forumOpen:${p.id}`); });
+  if (!html) html = `<div class="meta" style="padding:10px 12px">No matches. Press search to filter posts anyway.</div>`;
+  box.innerHTML = html;
+  box.hidden = false;
+}
+function pickTag(tag){
+  document.getElementById("search").value = "#" + tag;
+  document.getElementById("searchSuggest").hidden = true;
+  renderGrid();
+}
+function pickAuthor(uid){
+  document.getElementById("search").value = nameOf(uid);
+  document.getElementById("searchSuggest").hidden = true;
+  renderGrid();
+}
+
 function openAccount(){
   if (!me()) return openAuth("Sign in to open your account.");
   openOverlay("accountOverlay");
@@ -1372,11 +1432,8 @@ function renderAccount(){
     body.innerHTML = `<p class="empty">Loading your security settings...</p>`;
     renderSecurity(body);
   } else if (t === "messages") {
-    const groups = threadGroups();
-    body.innerHTML = `<div style="margin-top:12px">` + (groups.map(g => `<div class="listrow" data-action="openThread:${g.listing_id}|${g.other}" style="cursor:pointer">
-        <div><strong>${esc(g.title)}</strong><div class="meta">${esc(nameOf(g.other))} · ${esc(g.last.body)}</div></div>
-        ${g.unread ? `<span class="badge hd">${g.unread} new</span>` : ""}</div>`).join("")
-        || `<p class="empty">No messages yet.</p>`) + `</div>`;
+    body.innerHTML = `<p class="empty">Loading messages...</p>`;
+    renderInbox(body);
   } else if (t === "password") {
     body.innerHTML = `<form data-form="password" class="inline-col" style="margin-top:12px">
       <label>New password (at least 6 characters)<input name="pw" type="password" minlength="6" required autocomplete="new-password"></label>
@@ -1560,7 +1617,8 @@ document.getElementById("postForm").addEventListener("change", e => {
   if (t.id === "photoInput" && !isPaid() && t.files.length > 1) alert("Free plan allows 1 photo. Upgrade for more.");
   refreshFormOnChange();
 });
-document.getElementById("search").addEventListener("input", renderGrid);
+document.getElementById("search").addEventListener("input", () => { renderGrid(); renderSuggest(); });
+document.getElementById("search").addEventListener("blur", () => setTimeout(() => { document.getElementById("searchSuggest").hidden = true; }, 200));
 document.getElementById("sort").addEventListener("change", renderGrid);
 document.getElementById("upgradeBtn").addEventListener("click", startCheckout);
 document.getElementById("forgotLink").addEventListener("click", e => { e.preventDefault(); sendPasswordReset(); });
@@ -1616,6 +1674,8 @@ document.addEventListener("click", e => {
     forumOpen: () => openForumPost(arg),
     forumDelete: () => deleteForumPost(arg),
     dmOpen: () => openDM(arg),
+    forumTag: () => pickTag(arg),
+    forumAuthor: () => pickAuthor(arg),
     forumReplyDelete: () => deleteForumReply(arg),
     reportPost: () => reportItem("post", arg),
     reportReply: () => reportItem("reply", arg),
