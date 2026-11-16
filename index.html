@@ -1172,12 +1172,12 @@ function openForumPost(id){
       <button class="link" data-action="reportReply:${r.id}">Report</button>${r.author_id !== me() && me() ? ` <button class="link" data-action="dmOpen:${r.author_id}">Message</button>` : ""}${r.author_id === me() ? ` <button class="link" data-action="forumReplyDelete:${r.id}">Delete my reply</button>` : ""}
     </div>`).join("") || `<p class="meta">No replies yet.</p>`;
   document.getElementById("detailSheet").innerHTML = `
-    <h2>${esc(p.title)}</h2>
+    <h2>${esc(p.title)}${p.edited_at ? ' <span class="meta" style="font-size:.8rem">(edited)</span>' : ""}</h2>
     ${(p.tags || []).length ? `<p class="meta">${p.tags.map(t => "#" + esc(t)).join(" ")}</p>` : ""}
     <p class="meta">${p.zip_code ? "Zip " + esc(p.zip_code) : "Zip not set"} · ${forumAvatar(p.author_id)} ${forumName(p.author_id)} · ${fmtPosted(p.created_at)}</p>
     <p>${esc(p.body)}</p>
     ${(p.photos || []).map(u => `<img src="${esc(u)}" alt="" style="width:100%;border-radius:8px;margin-top:8px">`).join("")}
-    <div class="stats"><button class="link" data-action="reportPost:${p.id}">Report post</button>${p.author_id !== me() && me() ? ` <button class="link" data-action="dmOpen:${p.author_id}">Message author</button>` : ""}${p.author_id === me() ? ` <button class="link" data-action="forumDelete:${p.id}">Delete my post</button>` : ""}</div>
+    <div class="stats"><button class="link" data-action="reportPost:${p.id}">Report post</button>${p.author_id !== me() && me() ? ` <button class="link" data-action="dmOpen:${p.author_id}">Message author</button>` : ""}${p.author_id === me() ? ` <button class="link" data-action="forumEdit:${p.id}">Edit my post</button> <button class="link" data-action="forumDelete:${p.id}">Delete my post</button>` : ""}</div>
     ${pollHTML(p.id)}
     <h3>Replies</h3>
     ${repliesHTML}
@@ -1427,6 +1427,35 @@ async function pollVote(arg){
     await loadForum();
     openForumPost(postId);
   } catch(e){ alert(e.message); }
+}
+
+function openEditPost(id){
+  const p = forumPosts.find(x => x.id === id);
+  if (!p || p.author_id !== me()) return;
+  document.getElementById("detailSheet").innerHTML = `
+    <h2>Edit post</h2>
+    <p class="meta">Changes are checked against the word filter. Photos and polls can't be changed here.</p>
+    <form data-form="forumedit" data-id="${p.id}" class="inline-col">
+      <label>Title<input name="title" maxlength="120" required value="${esc(p.title)}"></label>
+      <label>Message<textarea name="body" rows="5" maxlength="2000" required>${esc(p.body)}</textarea></label>
+      <label>Tags (separated by commas)<input name="tags" maxlength="200" value="${esc((p.tags || []).join(", "))}"></label>
+      <div class="error" id="forumMsg"></div>
+      <div class="row"><button type="button" data-action="forumOpen:${p.id}">Cancel</button><button class="primary" type="submit">Save changes</button></div>
+    </form>`;
+  openOverlay("detailOverlay");
+}
+async function submitForumEdit(f){
+  const d = new FormData(f);
+  const id = f.dataset.id;
+  const msg = document.getElementById("forumMsg");
+  msg.textContent = "Saving...";
+  try {
+    await api(`/rest/v1/forum_posts?id=eq.${id}`, { method:"PATCH", prefer:"return=minimal",
+      body:{ title: String(d.get("title")).trim(), body: String(d.get("body")).trim(), edited_at: new Date().toISOString(),
+        tags: String(d.get("tags") || "").split(",").map(t => t.trim().toLowerCase().replace(/^#/, "")).filter(Boolean).slice(0, 8) } });
+    await loadForum();
+    openForumPost(id);
+  } catch(e){ msg.textContent = e.message; }
 }
 
 function openAccount(){
@@ -1708,6 +1737,7 @@ document.addEventListener("submit", e => {
     case "forumpost": submitForumPost(f); break;
     case "forumreply": submitForumReply(f); break;
     case "dm": sendDM(f); break;
+    case "forumedit": submitForumEdit(f); break;
     case "review": submitReview(f); break;
     case "profile": saveProfile(f); break;
     case "password": changePassword(f); break;
@@ -1738,6 +1768,7 @@ document.addEventListener("click", e => {
     forumTag: () => pickTag(arg),
     forumAuthor: () => pickAuthor(arg),
     pollVote: () => pollVote(arg),
+    forumEdit: () => openEditPost(arg),
     forumReplyDelete: () => deleteForumReply(arg),
     reportPost: () => reportItem("post", arg),
     reportReply: () => reportItem("reply", arg),
