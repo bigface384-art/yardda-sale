@@ -154,6 +154,7 @@ footer{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:
       <button class="small" data-action="legal:terms">Terms</button>
       <button class="small" data-action="legal:about">About us</button>
       <button class="small" data-action="legal:contact">Contact us</button>
+      <button class="small" data-action="legal:privacy">Privacy</button>
       <button class="small" data-action="legal:guidelines">Guidelines &amp; policy</button>
     </div>
     <div id="legalBody" class="legal-body" style="font-size:.92rem;line-height:1.5;max-height:65vh;overflow:auto"></div>
@@ -261,7 +262,7 @@ footer{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:
   </div>
 </div>
 
-<footer><div class="row" style="justify-content:center;gap:14px;margin:0 0 8px"><button class="link" data-action="legal:terms">Terms</button><button class="link" data-action="legal:about">About us</button><button class="link" data-action="legal:contact">Contact</button><button class="link" data-action="legal:guidelines">Guidelines</button></div>Listings are posted by users. Buyers are responsible for verifying items before purchase. Once a sale is made or you communicate off-platform, we are not responsible for lost, damaged, or incorrect items. We do not assist with recovering, reselling, or brokering items.</footer>
+<footer><div class="row" style="justify-content:center;gap:14px;margin:0 0 8px"><button class="link" data-action="legal:terms">Terms</button><button class="link" data-action="legal:about">About us</button><button class="link" data-action="legal:contact">Contact</button><button class="link" data-action="legal:privacy">Privacy</button><button class="link" data-action="legal:guidelines">Guidelines</button></div>Listings are posted by users. Buyers are responsible for verifying items before purchase. Once a sale is made or you communicate off-platform, we are not responsible for lost, damaged, or incorrect items. We do not assist with recovering, reselling, or brokering items.</footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://js.stripe.com/v3/"></script>
@@ -885,6 +886,46 @@ const LEGAL = {
 <h3>Emergencies</h3>
 <p>If someone is in danger, contact local emergency services first.</p>` },
 
+  privacy: { title: "Privacy Policy", html: `
+<p><em>Effective date: [EFFECTIVE DATE]</em></p>
+<p>This Privacy Policy explains what Community Yard Sales (the "Platform") collects, how we use it, who sees it, and the choices you have. It is operated by [COMPANY NAME], [MAILING ADDRESS]. Questions: [PRIVACY EMAIL].</p>
+<h3>1. Information you give us</h3>
+<ul>
+<li><strong>Account:</strong> email address, password (stored in encrypted form by our sign-in provider), first name, last name, username, age group, and home zip code.</li>
+<li><strong>Age confirmation:</strong> that you confirmed you are 18 or older, and when. We do not store your birth date.</li>
+<li><strong>Profile:</strong> display name, city, and an optional profile photo.</li>
+<li><strong>Activity:</strong> listings, photos, bids, offers, reviews, messages, forum posts, replies, poll votes, and reports you submit.</li>
+<li><strong>Payments:</strong> handled by Stripe. We do not store your full card number.</li>
+</ul>
+<h3>2. Information collected automatically</h3>
+<ul>
+<li><strong>Technical data:</strong> your IP address, browser type, and the pages you visit. Our hosting and database providers receive this when you use the site.</li>
+<li><strong>Device permissions:</strong> notifications, microphone, photos, camera, and location, but only the ones you choose in the Privacy tab. Location is used while you use the app, and we do not store your exact location.</li>
+<li><strong>Usage data:</strong> collected only if you turn on usage data in the Privacy tab. It is off by default.</li>
+</ul>
+<h3>3. What other people can see</h3>
+<p>Your username, profile photo, zip code, city, listings, reviews, forum posts, replies, and poll votes are visible to other users and to visitors who are not signed in. Private messages are visible only to the sender and the recipient. Bid amounts and penalty status can be seen by the people involved in that sale.</p>
+<h3>4. How we use information</h3>
+<p>We use it to run your account, show listings and forum posts, send sign-in and password emails and the notifications you choose, process bids and payments, protect the Platform from fraud and abuse, enforce our Guidelines, keep penalty records, and meet legal requirements.</p>
+<h3>5. Who we share it with</h3>
+<ul>
+<li><strong>Service providers:</strong> Supabase (database, file storage, and sign-in), GitHub (website hosting), Resend (email), and Stripe (payments). They process information only to provide their services to us.</li>
+<li><strong>Sales and advertising:</strong> we do not sell your personal information for money. Sharing with third parties for advertising is off by default. If you turn it on in the Privacy tab, we will update this policy first.</li>
+<li><strong>Legal requests:</strong> we may disclose information when required by law or to protect people's safety.</li>
+</ul>
+<h3>6. How long we keep information</h3>
+<p>When you delete your account, we remove your login, profile, listings, posts, replies, reviews, and messages you sent. We keep penalty and fraud records without your name or account link, so the rules stay enforceable. We keep payment records for as long as the law requires.</p>
+<h3>7. Your choices</h3>
+<p>In the Privacy tab of your Account, you can change device permissions, turn data collection and sharing on or off, unsubscribe from notifications, request a zip code change, or delete your account. You can also contact us at [PRIVACY EMAIL].</p>
+<h3>8. California privacy rights</h3>
+<p>If you live in California, you can ask what personal information we have about you, ask us to correct or delete it, and opt out of the sale or sharing of personal information. The "Do Not Sell or Share" choice is the sharing switch in the Privacy tab. We will not treat you differently for using these rights.</p>
+<h3>9. Children</h3>
+<p>The Platform is for adults 18 and older. We do not knowingly collect information from anyone under 18. If you believe a minor has created an account, contact us so we can remove it.</p>
+<h3>10. Security</h3>
+<p>We use reasonable safeguards, but no online service is completely secure. Protect your password, and tell us right away if you think your account has been used without permission.</p>
+<h3>11. Changes</h3>
+<p>We may update this policy. We will post the new date at the top of this page when we do.</p>
+` },
   guidelines: { title: "Guidelines & policy", html: `
 <h3>Prohibited items</h3>
 <p>Do not list items that are illegal to sell or possess where you live, including: firearms, ammunition, explosives, and weapons regulated by law; alcohol, tobacco, vaping products, and controlled substances or drug paraphernalia; stolen goods; counterfeit items; recalled products; live animals; human remains or body parts; adult content; and services or items that facilitate fraud or harm.</p>
@@ -937,7 +978,7 @@ async function renderPrivacy(body){
     <h3 style="margin-top:18px">Data and sharing (optional)</h3>
     ${row("data_collection","Usage data","Let us collect how you use the app to improve it. Off by default.")}
     ${row("third_party_sharing","Sharing with third parties","Let us share or sell your data to third parties, including for advertising. Off by default. You can turn it off at any time.")}
-    <p class="meta">California residents: this switch is your "Do Not Sell or Share" choice. Questions? <a href="#" data-action="legal:contact">Contact us</a>.</p>
+    <p class="meta">California residents: this switch is your "Do Not Sell or Share" choice. Questions? <a href="#" data-action="legal:contact">Contact us</a>.<br>Read our <a href="#" data-action="legal:privacy">Privacy Policy</a>.</p>
     <h3 style="margin-top:18px">Unsubscribe</h3>
     <button class="small" data-action="unsubscribeAll">Turn off notifications and data sharing</button>
     <div class="meta" style="margin-top:6px">Turns off notifications, usage data, and third-party sharing in one step.</div>
