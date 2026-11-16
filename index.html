@@ -1127,12 +1127,16 @@ async function turnOffMfa(id){
 
 let forumPosts = [];
 let forumReplies = [];
+let forumPolls = [];
+let forumVotes = [];
 async function loadForum(){
   try {
     forumPosts = (await api("/rest/v1/forum_posts?select=*&order=created_at.desc&limit=200")) || [];
     const ids = forumPosts.map(p => p.id);
     forumReplies = ids.length ? ((await api(`/rest/v1/forum_replies?select=*&post_id=in.(${ids.join(",")})&order=created_at.asc`)) || []) : [];
-  } catch(e){ forumPosts = []; forumReplies = []; }
+    forumPolls = (await api("/rest/v1/forum_polls?select=*")) || [];
+    forumVotes = (await api("/rest/v1/forum_poll_votes?select=*")) || [];
+  } catch(e){ forumPosts = []; forumReplies = []; forumPolls = []; forumVotes = []; }
   render();
 }
 function forumHTML(){
@@ -1152,7 +1156,7 @@ function forumHTML(){
       <p class="meta">${esc(String(p.body || "").slice(0, 160))}</p>
       ${(p.photos || []).length ? `<img src="${esc(p.photos[0])}" alt="" style="width:100%;max-height:240px;object-fit:cover;border-radius:8px">` : ""}
       ${recentHTML}
-      <div class="stats"><span>💬 ${count} ${count === 1 ? "reply" : "replies"}</span>${count > 2 ? `<button class="link" data-action="forumOpen:${p.id}">View all</button>` : ""}</div>
+      <div class="stats">${forumPolls.some(x => x.post_id === p.id) ? "<span>📊 Poll</span>" : ""}<span>💬 ${count} ${count === 1 ? "reply" : "replies"}</span>${count > 2 ? `<button class="link" data-action="forumOpen:${p.id}">View all</button>` : ""}</div>
     </div></div>`;
   }).join("");
   const empty = `<div class="empty">${q ? "No posts match your search." : "No posts yet. Start the conversation."}</div>`;
@@ -1174,6 +1178,7 @@ function openForumPost(id){
     <p>${esc(p.body)}</p>
     ${(p.photos || []).map(u => `<img src="${esc(u)}" alt="" style="width:100%;border-radius:8px;margin-top:8px">`).join("")}
     <div class="stats"><button class="link" data-action="reportPost:${p.id}">Report post</button>${p.author_id !== me() && me() ? ` <button class="link" data-action="dmOpen:${p.author_id}">Message author</button>` : ""}${p.author_id === me() ? ` <button class="link" data-action="forumDelete:${p.id}">Delete my post</button>` : ""}</div>
+    ${pollHTML(p.id)}
     <h3>Replies</h3>
     ${repliesHTML}
     ${me()
@@ -1192,6 +1197,11 @@ function openNewPost(){
       <label>Message<textarea name="body" rows="5" maxlength="2000" required></textarea></label>
       <label>Tags (optional, separated by commas)<input name="tags" maxlength="200" placeholder="yard sales, safety, events"></label>
       <label>Photos (up to 6, 5 MB each)<input type="file" name="photos" accept="image/*" multiple></label>
+      <label>Poll question (optional)<input name="pollq" maxlength="200" placeholder="For example: Should we hold a yard sale day?"></label>
+      <label>Poll option 1<input name="opt1" maxlength="80"></label>
+      <label>Poll option 2<input name="opt2" maxlength="80"></label>
+      <label>Poll option 3 (optional)<input name="opt3" maxlength="80"></label>
+      <label>Poll option 4 (optional)<input name="opt4" maxlength="80"></label>
       <div class="error" id="forumMsg"></div>
       <div class="row"><button type="button" data-action="closeOverlay:detailOverlay">Cancel</button><button class="primary" type="submit">Post</button></div>
     </form>`;
@@ -1210,6 +1220,11 @@ async function submitForumPost(f){
       body:{ author_id: me(), title: String(d.get("title")).trim(), body: String(d.get("body")).trim(),
         tags: String(d.get("tags") || "").split(",").map(t => t.trim().toLowerCase().replace(/^#/, "")).filter(Boolean).slice(0, 8), photos: photoUrls } });
     const row = Array.isArray(rows) ? rows[0] : rows;
+    const pollQ = String(d.get("pollq") || "").trim();
+    const opts = [1, 2, 3, 4].map(i => String(d.get("opt" + i) || "").trim()).filter(Boolean);
+    if (pollQ && opts.length >= 2 && row) {
+      await api("/rest/v1/forum_polls", { method:"POST", prefer:"return=minimal", body:{ post_id: row.id, question: pollQ, options: opts } });
+    }
     closeOverlay("detailOverlay");
     await loadForum();
     if (row && row.status !== "published") alert("Your post was sent for review before it appears.");
@@ -1383,6 +1398,35 @@ async function updateUnread(){
   try { n = ((await api(`/rest/v1/direct_messages?select=id&recipient_id=eq.${me()}&read_at=is.null`)) || []).length; } catch(e){}
   const btn = document.querySelector('#bottomNav button[data-action="nav:messages"]');
   if (btn) btn.innerHTML = `💬 Messages${n ? ` <strong style="color:#d4a017">(${n})</strong>` : ""}`;
+}
+
+function pollHTML(postId){
+  const poll = forumPolls.find(x => x.post_id === postId);
+  if (!poll) return "";
+  const votes = forumVotes.filter(v => v.post_id === postId);
+  const total = votes.length;
+  const mine = votes.find(v => v.voter_id === me());
+  const rows = poll.options.map((opt, i) => {
+    const n = votes.filter(v => v.option_index === i).length;
+    const pct = total ? Math.round(100 * n / total) : 0;
+    const vote = me() && !mine ? `<button class="small" data-action="pollVote:${postId}:${i}">Vote</button>` : "";
+    return `<div style="margin:8px 0">
+      <div class="row" style="justify-content:space-between;margin:0"><span>${esc(opt)}${mine && mine.option_index === i ? " ✓" : ""}</span><span class="meta">${n} · ${pct}%</span></div>
+      <div style="height:6px;background:var(--border);border-radius:4px;margin:4px 0"><div style="height:6px;width:${pct}%;background:var(--accent);border-radius:4px"></div></div>
+      ${vote}
+    </div>`;
+  }).join("");
+  return `<div class="box"><strong>Poll: ${esc(poll.question)}</strong>
+    <p class="meta">${total} vote${total === 1 ? "" : "s"}${me() ? (mine ? " · you voted" : "") : " · sign in to vote"}</p>${rows}</div>`;
+}
+async function pollVote(arg){
+  if (!me()) return openAuth("Sign in to vote.");
+  const [postId, idx] = arg.split(":");
+  try {
+    await api("/rest/v1/forum_poll_votes", { method:"POST", prefer:"return=minimal", body:{ post_id: postId, voter_id: me(), option_index: Number(idx) } });
+    await loadForum();
+    openForumPost(postId);
+  } catch(e){ alert(e.message); }
 }
 
 function openAccount(){
@@ -1693,6 +1737,7 @@ document.addEventListener("click", e => {
     dmOpen: () => openDM(arg),
     forumTag: () => pickTag(arg),
     forumAuthor: () => pickAuthor(arg),
+    pollVote: () => pollVote(arg),
     forumReplyDelete: () => deleteForumReply(arg),
     reportPost: () => reportItem("post", arg),
     reportReply: () => reportItem("reply", arg),
