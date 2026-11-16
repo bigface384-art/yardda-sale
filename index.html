@@ -383,6 +383,7 @@ async function loadAll(){
   render();
   if (isOpen("accountOverlay")) renderAccount();
   if (isOpen("threadOverlay")) renderThread();
+  updateUnread();
 }
 async function refreshAll(detailId){
   await loadAll();
@@ -1279,6 +1280,7 @@ async function renderDM(){
   try {
     msgs = (await api(`/rest/v1/direct_messages?select=*&or=(and(sender_id.eq.${me()},recipient_id.eq.${uid}),and(sender_id.eq.${uid},recipient_id.eq.${me()}))&order=created_at.asc`)) || [];
   } catch(e){ msgs = []; }
+  markDMRead(uid);
   document.getElementById("threadSheet").innerHTML = `
     <h2>Private message</h2>
     <p class="meta">With ${esc(nameOf(uid))}</p>
@@ -1322,11 +1324,12 @@ async function renderInbox(body){
   const convos = {};
   for (const m of dms){
     const other = m.sender_id === me() ? m.recipient_id : m.sender_id;
-    if (!convos[other]) convos[other] = { other, last: m };
+    if (!convos[other]) convos[other] = { other, last: m, unread: 0 };
+    if (m.recipient_id === me() && !m.read_at) convos[other].unread++;
   }
   const dmRows = Object.values(convos).map(c => `<div class="listrow" data-action="dmOpen:${c.other}" style="cursor:pointer">
       <div><strong>${esc(nameOf(c.other))}</strong><div class="meta">${esc(String(c.last.body).slice(0, 80))}</div></div>
-      <span class="meta">${fmtPosted(c.last.created_at)}</span>
+      <span class="meta">${fmtPosted(c.last.created_at)}</span>${c.unread ? ` <span class="badge hd">${c.unread} new</span>` : ""}
     </div>`).join("");
   const listingRows = threadGroups().map(g => `<div class="listrow" data-action="openThread:${g.listing_id}|${g.other}" style="cursor:pointer">
       <div><strong>${esc(g.title)}</strong><div class="meta">${esc(nameOf(g.other))} · ${esc(g.last.body)}</div></div>
@@ -1366,6 +1369,20 @@ function pickAuthor(uid){
   document.getElementById("search").value = nameOf(uid);
   document.getElementById("searchSuggest").hidden = true;
   renderGrid();
+}
+
+async function markDMRead(uid){
+  try {
+    await api(`/rest/v1/direct_messages?recipient_id=eq.${me()}&sender_id=eq.${uid}&read_at=is.null`, { method:"PATCH", prefer:"return=minimal", body:{ read_at: new Date().toISOString() } });
+  } catch(e){}
+  updateUnread();
+}
+async function updateUnread(){
+  if (!me()) return;
+  let n = 0;
+  try { n = ((await api(`/rest/v1/direct_messages?select=id&recipient_id=eq.${me()}&read_at=is.null`)) || []).length; } catch(e){}
+  const btn = document.querySelector('#bottomNav button[data-action="nav:messages"]');
+  if (btn) btn.innerHTML = `💬 Messages${n ? ` <strong style="color:#d4a017">(${n})</strong>` : ""}`;
 }
 
 function openAccount(){
