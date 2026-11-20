@@ -635,6 +635,11 @@ async function toggleSave(id){
   } catch(e){ alert(e.message); }
 }
 async function setSold(id, sold){
+  const target = db.listings.find(x => x.id === id);
+  if (sold && target && target.bid_state === "winning_bid_pending_token") {
+    alert("The winning bid must be paid with a token before this listing can be marked sold.");
+    return;
+  }
   try { await api(`/rest/v1/listings?id=eq.${id}`, { method:"PATCH", body:{ is_sold:sold }, prefer:"return=minimal" }); await refreshAll(id); }
   catch(e){ alert(e.message); }
 }
