@@ -1226,7 +1226,7 @@ function forumHTML(){
   const q = document.getElementById("search").value.trim().toLowerCase();
   const list = forumPosts.filter(p => !q || [p.title, p.body, p.zip_code, nameOf(p.author_id), ...(p.tags || [])].some(v => String(v || "").toLowerCase().includes(q)));
   const top = me()
-    ? `<div><button class="primary small" data-action="forumNew">+ New post</button></div>`
+    ? `<div class="row" style="justify-content:flex-start;gap:8px;margin:0"><button class="primary small" data-action="forumNew">+ New post</button><button class="primary small" data-action="eventNew">🎉 Post an event</button></div>`
     : `<p class="meta">Anyone can read the forum. Sign in to post or reply.</p>`;
   const cards = list.map(p => {
     const count = forumReplies.filter(r => r.post_id === p.id).length;
@@ -1234,6 +1234,7 @@ function forumHTML(){
     const recentHTML = recent.map(r => `<div class="meta" style="padding:6px 0;border-top:1px solid var(--border)"><strong>${esc(nameOf(r.author_id))}</strong>: ${esc(String(r.body || "").slice(0, 140))}</div>`).join("");
     return `<div class="card" data-action="forumOpen:${p.id}"><div class="cbody">
       <h3>${esc(p.title)}</h3>
+      ${p.kind === "event" ? eventLine(p.event) : ""}
       ${(p.tags || []).length ? `<p class="meta">${p.tags.map(t => "#" + esc(t)).join(" ")}</p>` : ""}
       <p class="meta">${p.zip_code ? "Zip " + esc(p.zip_code) : "Zip not set"} · ${forumAvatar(p.author_id)} ${forumName(p.author_id)} · ${fmtPosted(p.created_at)}</p>
       <p class="meta">${esc(String(p.body || "").slice(0, 160))}</p>
@@ -1261,6 +1262,7 @@ function openForumPost(id){
     <p>${esc(p.body)}</p>
     ${(p.photos || []).map(u => `<img src="${esc(u)}" alt="" style="width:100%;border-radius:8px;margin-top:8px">`).join("")}
     <div class="stats"><button class="link" data-action="reportPost:${p.id}">Report post</button>${p.author_id !== me() && me() ? ` <button class="link" data-action="dmOpen:${p.author_id}">Message author</button>` : ""}${p.author_id === me() ? ` <button class="link" data-action="forumEdit:${p.id}">Edit my post</button> <button class="link" data-action="forumDelete:${p.id}">Delete my post</button>` : ""}</div>
+    ${p.kind === "event" ? eventBox(p.event) : ""}
     ${pollHTML(p.id)}
     <h3>Replies</h3>
     ${repliesHTML}
@@ -1538,6 +1540,60 @@ async function submitForumEdit(f){
         tags: String(d.get("tags") || "").split(",").map(t => t.trim().toLowerCase().replace(/^#/, "")).filter(Boolean).slice(0, 8) } });
     await loadForum();
     openForumPost(id);
+  } catch(e){ msg.textContent = e.message; }
+}
+
+function eventLine(ev){
+  if (!ev) return "";
+  const when = [ev.date ? fmtDate(ev.date) : "", ev.time_from ? (ev.time_to ? `${ev.time_from} to ${ev.time_to}` : ev.time_from) : ""].filter(Boolean).join(" · ");
+  return `<p class="meta">🎉 ${esc(when)}${ev.location ? " · 📍 " + esc(ev.location) : ""}</p>`;
+}
+function eventBox(ev){
+  if (!ev) return "";
+  return `<div class="box bidbox"><strong>🎉 Event details</strong>
+    <p style="margin:6px 0 0">${ev.organizer ? "<strong>Hosted by:</strong> " + esc(ev.organizer) + "<br>" : ""}${ev.date ? "<strong>Date:</strong> " + esc(fmtDate(ev.date)) + "<br>" : ""}${ev.time_from ? "<strong>Time:</strong> " + esc(ev.time_from) + (ev.time_to ? " to " + esc(ev.time_to) : "") + "<br>" : ""}${ev.location ? "<strong>Location:</strong> " + esc(ev.location) + "<br>" : ""}${ev.contact ? "<strong>Contact / links:</strong> " + esc(ev.contact) : ""}</p>
+  </div>`;
+}
+function openNewEvent(){
+  if (!me()) return openAuth("Sign in to post an event.");
+  document.getElementById("detailSheet").innerHTML = `
+    <h2>Post an event</h2>
+    <p class="meta">Yard sales, block parties, and neighborhood events. Your zip code is shown with the event.</p>
+    <form data-form="forumevent" class="inline-col">
+      <label>Event name<input name="title" maxlength="120" required placeholder="Block party on Maple Street"></label>
+      <label>Event planner or organization(s)<input name="organizer" maxlength="120" required></label>
+      <label>Location<input name="location" maxlength="160" required placeholder="Address or meeting spot"></label>
+      <label>Date<input name="date" type="date" required></label>
+      <label>Time from<input name="time_from" type="time" required></label>
+      <label>Time to<input name="time_to" type="time"></label>
+      <label>Contact / links<input name="contact" maxlength="300" placeholder="Phone, email, or website"></label>
+      <label>Details (optional)<textarea name="description" rows="3" maxlength="1000"></textarea></label>
+      <div class="error" id="forumMsg"></div>
+      <div class="row"><button type="button" data-action="closeOverlay:detailOverlay">Cancel</button><button class="primary" type="submit">Post event</button></div>
+    </form>`;
+  openOverlay("detailOverlay");
+}
+async function submitForumEvent(f){
+  const d = new FormData(f);
+  const msg = document.getElementById("forumMsg");
+  msg.textContent = "Posting...";
+  const event = {
+    organizer: String(d.get("organizer") || "").trim(),
+    location: String(d.get("location") || "").trim(),
+    date: String(d.get("date") || ""),
+    time_from: String(d.get("time_from") || ""),
+    time_to: String(d.get("time_to") || ""),
+    contact: String(d.get("contact") || "").trim()
+  };
+  const title = String(d.get("title") || "").trim();
+  const body = String(d.get("description") || "").trim() || `Hosted by ${event.organizer}. See the event details.`;
+  try {
+    const rows = await api("/rest/v1/forum_posts", { method:"POST", prefer:"return=representation",
+      body:{ author_id: me(), kind: "event", title, body, event } });
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    closeOverlay("detailOverlay");
+    await loadForum();
+    if (row && row.status !== "published") alert("Your event was sent for review before it appears.");
   } catch(e){ msg.textContent = e.message; }
 }
 
@@ -1821,6 +1877,7 @@ document.addEventListener("submit", e => {
     case "forumreply": submitForumReply(f); break;
     case "dm": sendDM(f); break;
     case "forumedit": submitForumEdit(f); break;
+    case "forumevent": submitForumEvent(f); break;
     case "review": submitReview(f); break;
     case "profile": saveProfile(f); break;
     case "password": changePassword(f); break;
@@ -1845,6 +1902,7 @@ document.addEventListener("click", e => {
     openAccount: () => openAccount(),
     legal: () => openLegal(arg),
     forumNew: () => openNewPost(),
+    eventNew: () => openNewEvent(),
     forumOpen: () => openForumPost(arg),
     forumDelete: () => deleteForumPost(arg),
     dmOpen: () => openDM(arg),
