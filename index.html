@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Community Yard Sales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:ital,wght@0,400;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#faf8f4;--card:#fff;--text:#1d1b18;--muted:#6b6560;--accent:#2f7d5b;--accent-text:#fff;--border:#e5e0d8;--sold:#b3261e;--hot:#c2410c;--hot-bg:#fff4ed;--bid:#6d28d9;--bid-bg:#f5f0ff;--star:#d4a017;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161513;--card:#22201d;--text:#f1ede7;--muted:#a39d95;--accent:#5fb88f;--accent-text:#0f1f17;--border:#3a3733;--sold:#f2877f;--hot:#fb923c;--hot-bg:#2e2119;--bid:#c4b5fd;--bid-bg:#2a2438;--star:#f0c040}}
@@ -98,12 +101,41 @@ label.check input{width:auto;margin-top:3px}
 .bubble.me .meta{color:var(--accent-text);opacity:.85}
 .inline-col{display:grid;gap:10px}
 footer{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);padding:8px 16px calc(8px + env(safe-area-inset-bottom,0px));font-size:.75rem;color:var(--muted);text-align:center}
+
+/* Christmas theme */
+:root{--bg:#fffaf3;--card:#ffffff;--text:#2b2118;--muted:#6b5b4b;--accent:#1f6f43;--accent-text:#ffffff;--border:#eadfcf;--sold:#c62828;--star:#d4a017;--hot:#c2410c;--hot-bg:#fff4ea;--bid:#7b2cbf;--bid-bg:#f6effc}
+body{font-family:'Nunito',system-ui,sans-serif;font-size:16px;line-height:1.5}
+h1,h2,h3,.tab,button,.plan,.badge,.chip{font-family:'Fredoka',system-ui,sans-serif}
+h1{font-weight:700;color:#c62828}
+h1::before{content:"🎄 "}
+h1::after{content:" 🎁"}
+h2{font-weight:600;color:#1f6f43}
+h3{font-weight:600;font-style:italic;color:#8b1e1e}
+.price{font-weight:800;font-size:1.1em}
+.meta{font-style:italic}
+.card{border-radius:16px;border:2px solid #f0e4d2;box-shadow:0 2px 8px rgba(80,40,20,.08)}
+.card h3{font-style:normal;color:var(--text)}
+.badge{font-weight:700}
+button.primary{border-radius:999px;font-weight:700;box-shadow:0 2px 0 #14452a}
+.tab{font-weight:600}
+.tab.active{color:#c62828;border-bottom-color:#1f6f43}
+.banner h2{font-style:italic}
+.chip{font-weight:600}
+.chip.active{background:#1f6f43;border-color:#1f6f43;color:#fff}
+header{border-top:6px solid #c62828}
+footer{background:#fffaf3;border-top:3px dashed #c62828}
+.birds{font-size:1.1rem;letter-spacing:4px;margin-left:8px}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#1d1a16;--card:#2a2520;--text:#f5efe6;--muted:#bfb3a3;--accent:#6fcf97;--accent-text:#0f1f14;--border:#40362c;--sold:#ff8a80;--star:#ffd54f;--hot-bg:#33241a;--bid-bg:#2b2238;--bid:#d1b3ff}
+  :root:not([data-theme="light"]) h2{color:#8fdcae}
+  :root:not([data-theme="light"]) h3{color:#ffb4a8}
+}
 </style>
 </head>
 <body>
 <header>
   <div class="topline">
-    <h1>Community Yard Sales</h1>
+    <h1>Community Yard Sales</h1><span class="birds" aria-hidden="true">🐦 🐦</span>
     <div class="hbtns">
       <span class="plan" id="planBadge">Free plan</span>
       <button class="small" data-action="openPlan">Plans</button>
@@ -246,8 +278,11 @@ footer{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:
 <div class="overlay" id="planOverlay">
   <div class="sheet">
     <h2>Plans</h2>
+    <div class="box bidbox"><strong>Early Bird Free Promo Membership</strong>
+      <p class="meta" style="margin:6px 0 0">Every feature is free until January 1, 2027, including Barter &amp; Bid, Hot Deals, and unlimited photos. Paid pricing will be announced before the promo ends.</p>
+    </div>
     <div class="box"><strong>Free:</strong> Browse, post fixed-price listings, 1 photo per listing.</div>
-    <div class="box bidbox"><strong>Paid: $4.99/month</strong>
+    <div class="box bidbox"><strong><s>Paid: $10.00/month</s></strong> <span class="meta">Crossed off with thanks: free during the Early Bird promo for our first members.</span>
       <ul style="margin:8px 0 0;padding-left:18px">
         <li><strong>Barter &amp; Bid:</strong> open items to buyer bids or trade offers. Competitive bidding can push an item above its asking price, though results vary.</li>
         <li>Unlimited photos per listing.</li>
@@ -256,13 +291,13 @@ footer{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:
     </div>
     <div class="row">
       <button data-action="closeOverlay:planOverlay">Close</button>
-      <button class="primary" id="upgradeBtn">Start paid plan</button>
+      <button class="primary" id="upgradeBtn" disabled>Promo active until 2027</button>
     </div>
     <p class="note" id="planNote"></p>
   </div>
 </div>
 
-<footer><div class="row" style="justify-content:center;gap:14px;margin:0 0 8px"><button class="link" data-action="legal:terms">Terms</button><button class="link" data-action="legal:about">About us</button><button class="link" data-action="legal:contact">Contact</button><button class="link" data-action="legal:privacy">Privacy</button><button class="link" data-action="legal:guidelines">Guidelines</button></div>Listings are posted by users. Buyers are responsible for verifying items before purchase. Once a sale is made or you communicate off-platform, we are not responsible for lost, damaged, or incorrect items. We do not assist with recovering, reselling, or brokering items.</footer>
+<footer><div class="birds" style="margin:0 0 4px;text-align:center" aria-hidden="true">🐦 ❄️ 🐦 ❄️ 🐦</div><p style="margin:0 0 6px;font-weight:600;color:var(--accent)">Bring your friends and fam on before the paid subscription begins on the 1st of the New Year!</p><div class="row" style="justify-content:center;gap:14px;margin:0 0 8px"><button class="link" data-action="legal:terms">Terms</button><button class="link" data-action="legal:about">About us</button><button class="link" data-action="legal:contact">Contact</button><button class="link" data-action="legal:privacy">Privacy</button><button class="link" data-action="legal:guidelines">Guidelines</button></div>Listings are posted by users. Buyers are responsible for verifying items before purchase. Once a sale is made or you communicate off-platform, we are not responsible for lost, damaged, or incorrect items. We do not assist with recovering, reselling, or brokering items.</footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://js.stripe.com/v3/"></script>
@@ -279,7 +314,9 @@ let db = { listings:[], profiles:{}, likes:[], saves:[], bids:[], offers:[], rev
 let ui = { view:"forum", category:"All", plan:"free", accountTab:"profile", editingId:null, existingPhotos:[], authMode:"signin", viewed:new Set(), detailId:null, thread:null };
 
 const me = () => session ? session.user.id : null;
-const isPaid = () => ui.plan === "paid";
+const PROMO_UNTIL = "2027-01-01T00:00:00";
+const promoActive = () => Date.now() < new Date(PROMO_UNTIL).getTime();
+const isPaid = () => promoActive() || ui.plan === "paid";
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money = n => "$" + Number(n).toFixed(2);
 const fmtDate = d => d ? new Date(d + "T00:00:00").toLocaleDateString(undefined, {weekday:"short", month:"short", day:"numeric"}) : "";
@@ -401,7 +438,7 @@ function renderHeader(){
   if (listBtn) listBtn.hidden = ui.view === "forum";
   document.getElementById("search").placeholder = ui.view === "forum" ? "Search posts, authors, or tags" : "Search items, streets, cities, or sellers";
   const pb = document.getElementById("planBadge");
-  pb.textContent = isPaid() ? "Paid plan" : "Free plan";
+  pb.textContent = promoActive() ? "Early Bird Free" : (isPaid() ? "Paid plan" : "Free plan");
   pb.classList.toggle("paid", isPaid());
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.action === (ui.view === "forum" ? "view:forum" : "view:all")));
 }
